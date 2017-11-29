@@ -12,7 +12,8 @@ OBJDIR=obj
 BINDIR=bin
 
 CFLAGS=-Wall
-LDFLAGS=-lssl
+#  OpenSSL provides encryption and decryption operations in libcrypto
+LDFLAGS=-lcrypto
 
 CC=gcc
 
