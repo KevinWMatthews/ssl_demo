@@ -12,7 +12,7 @@ OBJDIR=obj
 BINDIR=bin
 
 CFLAGS=-Wall
-# LDFLAGS=-lopenssl
+LDFLAGS=-lssl
 
 CC=gcc
 
