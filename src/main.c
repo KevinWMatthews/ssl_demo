@@ -14,17 +14,17 @@ int aes_init(unsigned char *key_data, int key_data_len, unsigned char *salt,
     unsigned char key[32], iv[32];
 
     // Generate key and initialization vector
-    i = EVP_BytesToKey(EVP_aes_256_cbc(), EVP_sha1(), salt, key_data, key_data_len, nrounds, key, iv);
-    if (i != 32)
+    i = EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha1(), salt, key_data, key_data_len, nrounds, key, iv);
+    if (i != 16)
     {
-        printf("Key size is %d bits - should be 256 bits\n", i);
+        printf("Key size is %d bytes - should be 16 bytes (128 bits)\n", i);
         return -1;
     }
 
     EVP_CIPHER_CTX_init(e_ctx);
-    EVP_EncryptInit_ex(e_ctx, EVP_aes_256_cbc(), NULL, key, iv);
+    EVP_EncryptInit_ex(e_ctx, EVP_aes_128_cbc(), NULL, key, iv);
     EVP_CIPHER_CTX_init(d_ctx);
-    EVP_DecryptInit_ex(d_ctx, EVP_aes_256_cbc(), NULL, key, iv);
+    EVP_DecryptInit_ex(d_ctx, EVP_aes_128_cbc(), NULL, key, iv);
 
     return 0;
 }
