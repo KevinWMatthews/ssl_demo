@@ -1,12 +1,17 @@
 #include "aes_openssl.h"
 #include <openssl/aes.h>
+#include <stdio.h>
 
-// Returns 0 on success and -1 on failure
-int aes_init(unsigned char *key_data, int key_data_len, unsigned char *salt,
-        EVP_CIPHER_CTX *e_ctx, EVP_CIPHER_CTX *d_ctx)
+static EVP_CIPHER_CTX en_ctx_struct, de_ctx_struct;
+static EVP_CIPHER_CTX *en_ctx, *de_ctx;
+
+int aes_init(unsigned char *key_data, int key_data_len, unsigned char *salt)
 {
     int i, nrounds = 5;
     unsigned char key[17] = {0}, iv[17] = {0};  // Is null-termination necessary?
+
+    en_ctx = &en_ctx_struct;
+    de_ctx = &de_ctx_struct;
 
     // Generate key and initialization vector
     i = EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha1(), salt, key_data, key_data_len, nrounds, key, iv);
@@ -24,19 +29,24 @@ int aes_init(unsigned char *key_data, int key_data_len, unsigned char *salt,
      * key is the symmetric key
      * iv is the IV (Initialization vector)
      */
-    EVP_CIPHER_CTX_init(e_ctx);
-    EVP_EncryptInit_ex(e_ctx, EVP_aes_128_cbc(), NULL, key, iv);
-    EVP_CIPHER_CTX_init(d_ctx);
-    EVP_DecryptInit_ex(d_ctx, EVP_aes_128_cbc(), NULL, key, iv);
+    EVP_CIPHER_CTX_init(en_ctx);
+    EVP_EncryptInit_ex(en_ctx, EVP_aes_128_cbc(), NULL, key, iv);
+    EVP_CIPHER_CTX_init(de_ctx);
+    EVP_DecryptInit_ex(de_ctx, EVP_aes_128_cbc(), NULL, key, iv);
 
     return 0;
+}
+
+void aes_uninit(void)
+{
+    EVP_CIPHER_CTX_cleanup(en_ctx);
+    EVP_CIPHER_CTX_cleanup(de_ctx);
 }
 
 // This will return a char * to a malloc'ed buffer of cipher text.
 // The caller is responsible for freeing this buffer!
 // It places the length of the ciphertext in ciphertext_len.
-unsigned char *aes_encrypt(EVP_CIPHER_CTX *e_ctx, unsigned char *plaintext,
-        int plaintext_len, int *ciphertext_len)
+unsigned char *aes_encrypt(unsigned char *plaintext, int plaintext_len, int *ciphertext_len)
 {
     // The resulting cipher text can range from 0 bytes to: input_length + cipher_block_size - 1
     // (not including the null terminator?).
@@ -46,7 +56,7 @@ unsigned char *aes_encrypt(EVP_CIPHER_CTX *e_ctx, unsigned char *plaintext,
     unsigned char *ptr = NULL;
 
     // Not sure why, but this allows us to use the same context for multiple encryption cycles
-    EVP_EncryptInit_ex(e_ctx, NULL, NULL, NULL, NULL);
+    EVP_EncryptInit_ex(en_ctx, NULL, NULL, NULL, NULL);
 
     /*
      *  int EVP_EncryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,
@@ -55,8 +65,7 @@ unsigned char *aes_encrypt(EVP_CIPHER_CTX *e_ctx, unsigned char *plaintext,
      * Encrypt 'in' and place it in 'out'.
      * Operates on 'inl' (input length) bytes and updates 'outl' accordingly.
      */
-    EVP_EncryptUpdate(e_ctx, ciphertext, &update_encrypt_len, plaintext, plaintext_len);
-    printf("encrypt update: %d\n", update_encrypt_len);
+    EVP_EncryptUpdate(en_ctx, ciphertext, &update_encrypt_len, plaintext, plaintext_len);
 
     /*
      *  int EVP_EncryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *out,
@@ -68,19 +77,16 @@ unsigned char *aes_encrypt(EVP_CIPHER_CTX *e_ctx, unsigned char *plaintext,
      */
     // Skip the portion of the buffer that was written to durign the 'Update' process
     ptr = ciphertext+update_encrypt_len;
-    EVP_EncryptFinal_ex(e_ctx, ptr, &final_encrypt_len);
-    printf("encrypt final: %d\n", final_encrypt_len);
+    EVP_EncryptFinal_ex(en_ctx, ptr, &final_encrypt_len);
 
     *ciphertext_len = update_encrypt_len + final_encrypt_len;
-    printf("encrypt total: %d\n", *ciphertext_len);
     return ciphertext;
 }
 
 // This will return a char * to a malloc'ed buffer of decrypted cipher text.
 // The caller is responsible for freeing this buffer!
 // It places the length of the decrypted text in deryptedtext_len.
-unsigned char *aes_decrypt(EVP_CIPHER_CTX *d_ctx, unsigned char *ciphertext,
-        int ciphertext_len, int *decryptedtext_len)
+unsigned char *aes_decrypt(unsigned char *ciphertext, int ciphertext_len, int *decryptedtext_len)
 {
     int decryptedtext_max_len = ciphertext_len + AES_BLOCK_SIZE;        // I think...
     int update_decrypt_len = 0, final_decrypt_len = 0;
@@ -88,7 +94,7 @@ unsigned char *aes_decrypt(EVP_CIPHER_CTX *d_ctx, unsigned char *ciphertext,
     unsigned char *ptr;
 
     // Not sure why, but this allows us to use the same context for multiple dencryption cycles
-    EVP_DecryptInit_ex(d_ctx, NULL, NULL, NULL, NULL);
+    EVP_DecryptInit_ex(de_ctx, NULL, NULL, NULL, NULL);
 
     /*
      *  int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,
@@ -97,8 +103,7 @@ unsigned char *aes_decrypt(EVP_CIPHER_CTX *d_ctx, unsigned char *ciphertext,
      * Decrypt 'in' and place it in 'out'.
      * Operates on 'inl' (input length) bytes and updates 'outl' accordingly.
      */
-    EVP_DecryptUpdate(d_ctx, decryptedtext, &update_decrypt_len, ciphertext, ciphertext_len);
-    printf("decrypt update: %d\n", update_decrypt_len);
+    EVP_DecryptUpdate(de_ctx, decryptedtext, &update_decrypt_len, ciphertext, ciphertext_len);
 
     /*  int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm,
      *      int *outl);
@@ -109,7 +114,7 @@ unsigned char *aes_decrypt(EVP_CIPHER_CTX *d_ctx, unsigned char *ciphertext,
      */
     // Skip the portion of the buffer that was written to durign the 'Update' process
     ptr = decryptedtext + update_decrypt_len;
-    EVP_DecryptFinal_ex(d_ctx, ptr, &final_decrypt_len);
+    EVP_DecryptFinal_ex(de_ctx, ptr, &final_decrypt_len);
 
     *decryptedtext_len = update_decrypt_len + final_decrypt_len;
     return decryptedtext;
