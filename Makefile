@@ -5,13 +5,13 @@ TARGET_NAME=ssl_demo
 
 # List all source files here.
 # These are assumed to be in SRCDIR.
-SRC=main.c
+SRC=main.c aes_openssl.c
 
 SRCDIR=src
 OBJDIR=obj
 BINDIR=bin
 
-CFLAGS=-Wall
+CFLAGS=-Wall -Iinc
 #  OpenSSL provides encryption and decryption operations in libcrypto
 LDFLAGS=-lcrypto
 
