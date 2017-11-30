@@ -7,11 +7,12 @@
 #include <openssl/evp.h>
 #include <openssl/aes.h>
 
+// Returns 0 on success and -1 on failure
 int aes_init(unsigned char *key_data, int key_data_len, unsigned char *salt,
         EVP_CIPHER_CTX *e_ctx, EVP_CIPHER_CTX *d_ctx)
 {
     int i, nrounds = 5;
-    unsigned char key[32], iv[32];
+    unsigned char key[17] = {0}, iv[17] = {0};  // Is null-termination necessary?
 
     // Generate key and initialization vector
     i = EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha1(), salt, key_data, key_data_len, nrounds, key, iv);
@@ -85,8 +86,7 @@ unsigned char *aes_encrypt(EVP_CIPHER_CTX *e_ctx, unsigned char *plaintext, int 
 // It places the length of the decrypted text in deryptedtext_len.
 unsigned char *aes_decrypt(EVP_CIPHER_CTX *d_ctx, unsigned char *ciphertext, int ciphertext_len, int *decryptedtext_len)
 {
-    // Shouldn't we account for the cipher block size?
-    int decryptedtext_max_len = *decryptedtext_len;
+    int decryptedtext_max_len = ciphertext_len + AES_BLOCK_SIZE;        // I think...
     int update_decrypt_len = 0, final_decrypt_len = 0;
     unsigned char *decryptedtext = malloc(decryptedtext_max_len);
     unsigned char *ptr;
@@ -102,6 +102,7 @@ unsigned char *aes_decrypt(EVP_CIPHER_CTX *d_ctx, unsigned char *ciphertext, int
      * Operates on 'inl' (input length) bytes and updates 'outl' accordingly.
      */
     EVP_DecryptUpdate(d_ctx, decryptedtext, &update_decrypt_len, ciphertext, ciphertext_len);
+    printf("decrypt update: %d\n", update_decrypt_len);
 
     /*  int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm,
      *      int *outl);
@@ -120,8 +121,7 @@ unsigned char *aes_decrypt(EVP_CIPHER_CTX *d_ctx, unsigned char *ciphertext, int
 
 int main(int argc, char **argv)
 {
-    EVP_CIPHER_CTX en, de;      // Encryption, decryption
-
+    EVP_CIPHER_CTX en_ctx, de_ctx;      // Encryption, decryption
     unsigned int salt[] = {12345, 54321};
     unsigned char *key_data;
     int key_data_len, i;
@@ -136,7 +136,7 @@ int main(int argc, char **argv)
     key_data = (unsigned char *)argv[1];
     key_data_len = strlen(argv[1]);
 
-    if ( aes_init(key_data, key_data_len, (unsigned char *)&salt, &en, &de) )
+    if ( aes_init(key_data, key_data_len, (unsigned char *)&salt, &en_ctx, &de_ctx) < 0 )
     {
         printf("Couldn't initialize AES cipher\n");
         return -1;
@@ -144,27 +144,30 @@ int main(int argc, char **argv)
 
     for (i = 0; input[i]; i++)
     {
-        char *plaintext;
-        unsigned char *ciphertext;
-        int olen, len;
+        unsigned char *plaintext = NULL, *ciphertext = NULL, *decryptedtext = NULL;
+        int plaintext_len, ciphertext_len, decryptedtext_len;
 
-        /* */
-        olen = len = strlen(input[i])+1;
+        plaintext = (unsigned char *)input[i];
+        // strlen does not include the null terminator
+        // Apparently we pass this to the encrypt/decrypt functions so that they return a null-terminated string.
+        plaintext_len = strlen(input[i])+1;
 
-        ciphertext = aes_encrypt(&en, (unsigned char *)input[i], len, &len);
-        plaintext = (char *)aes_decrypt(&de, ciphertext, len, &len);
+        ciphertext = aes_encrypt(&en_ctx, plaintext, plaintext_len, &ciphertext_len);
+        decryptedtext = aes_decrypt(&de_ctx, ciphertext, ciphertext_len, &decryptedtext_len);
 
-        if (strncmp(plaintext, input[i], olen))
-            printf("FAIL: enc/dec failed for \"%s\"\n", input[i]);
+        if (strncmp((char *)plaintext, (char *)decryptedtext, plaintext_len))
+            printf("FAIL: enc/dec failed for \"%s\"\n", plaintext);
         else
-            printf("OK: enc/dec ok for \"%s\"\n", plaintext);
+            printf("OK: enc/dec ok for \"%s\"\n", decryptedtext);
 
-        free(ciphertext);
-        free(plaintext);
+        if (ciphertext)
+            free(ciphertext);
+        if (decryptedtext)
+            free(decryptedtext);
     }
 
-    EVP_CIPHER_CTX_cleanup(&en);
-    EVP_CIPHER_CTX_cleanup(&de);
+    EVP_CIPHER_CTX_cleanup(&en_ctx);
+    EVP_CIPHER_CTX_cleanup(&de_ctx);
 
     return 0;
 }
