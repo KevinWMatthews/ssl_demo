@@ -38,8 +38,8 @@ int aes_init(unsigned char *key_data, int key_data_len, unsigned char *salt,
 }
 
 // This will return a char * to a malloc'ed buffer of cipher text.
+// The caller is responsible for freeing this buffer!
 // It places the length of the ciphertext in ciphertext_len.
-// The caller is responsible for freeing the cipher text buffer!
 unsigned char *aes_encrypt(EVP_CIPHER_CTX *e_ctx, unsigned char *plaintext, int plaintext_len, int *ciphertext_len)
 {
     // The resulting cipher text can range from 0 bytes to: input_length + cipher_block_size - 1
@@ -57,7 +57,7 @@ unsigned char *aes_encrypt(EVP_CIPHER_CTX *e_ctx, unsigned char *plaintext, int 
      *      int *outl, unsigned char *in, int inl);
      *
      * Encrypt 'in' and place it in 'out'.
-     * Operates on 'inl' (input length) bytes and updates 'outl' accordingly
+     * Operates on 'inl' (input length) bytes and updates 'outl' accordingly.
      */
     EVP_EncryptUpdate(e_ctx, ciphertext, &update_encrypt_len, plaintext, plaintext_len);
     printf("encrypt update: %d\n", update_encrypt_len);
@@ -80,18 +80,42 @@ unsigned char *aes_encrypt(EVP_CIPHER_CTX *e_ctx, unsigned char *plaintext, int 
     return ciphertext;
 }
 
-unsigned char *aes_decrypt(EVP_CIPHER_CTX *d_ctx, unsigned char *ciphertext, int *len)
+// This will return a char * to a malloc'ed buffer of decrypted cipher text.
+// The caller is responsible for freeing this buffer!
+// It places the length of the decrypted text in deryptedtext_len.
+unsigned char *aes_decrypt(EVP_CIPHER_CTX *d_ctx, unsigned char *ciphertext, int ciphertext_len, int *decryptedtext_len)
 {
-    int p_len = *len, f_len = 0;
-    unsigned char *plaintext = malloc(p_len);
+    // Shouldn't we account for the cipher block size?
+    int decryptedtext_max_len = *decryptedtext_len;
+    int update_decrypt_len = 0, final_decrypt_len = 0;
+    unsigned char *decryptedtext = malloc(decryptedtext_max_len);
+    unsigned char *ptr;
 
     // Not sure why, but this allows us to use the same context for multiple dencryption cycles
     EVP_DecryptInit_ex(d_ctx, NULL, NULL, NULL, NULL);
-    EVP_DecryptUpdate(d_ctx, plaintext, &p_len, ciphertext, *len);
-    EVP_DecryptFinal_ex(d_ctx, plaintext+p_len, &f_len);
 
-    *len = p_len + f_len;
-    return plaintext;
+    /*
+     *  int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,
+     *      int *outl, unsigned char *in, int inl);
+     *
+     * Decrypt 'in' and place it in 'out'.
+     * Operates on 'inl' (input length) bytes and updates 'outl' accordingly.
+     */
+    EVP_DecryptUpdate(d_ctx, decryptedtext, &update_decrypt_len, ciphertext, ciphertext_len);
+
+    /*  int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm,
+     *      int *outl);
+     *
+     * If padding is enabled, this decrypts any data that remains in a partial block.
+     * Data is written to out.
+     * The number of bytes written is placed in outl.
+     */
+    // Skip the portion of the buffer that was written to durign the 'Update' process
+    ptr = decryptedtext + update_decrypt_len;
+    EVP_DecryptFinal_ex(d_ctx, ptr, &final_decrypt_len);
+
+    *decryptedtext_len = update_decrypt_len + final_decrypt_len;
+    return decryptedtext;
 }
 
 int main(int argc, char **argv)
@@ -128,7 +152,7 @@ int main(int argc, char **argv)
         olen = len = strlen(input[i])+1;
 
         ciphertext = aes_encrypt(&en, (unsigned char *)input[i], len, &len);
-        plaintext = (char *)aes_decrypt(&de, ciphertext, &len);
+        plaintext = (char *)aes_decrypt(&de, ciphertext, len, &len);
 
         if (strncmp(plaintext, input[i], olen))
             printf("FAIL: enc/dec failed for \"%s\"\n", input[i]);
