@@ -37,11 +37,14 @@ int aes_init(unsigned char *key_data, int key_data_len, unsigned char *salt,
     return 0;
 }
 
-unsigned char *aes_encrypt(EVP_CIPHER_CTX *e_ctx, unsigned char *plaintext, int *plaintext_len)
+// This will return a char * to a malloc'ed buffer of cipher text.
+// It places the length of the ciphertext in ciphertext_len.
+// The caller is responsible for freeing the cipher text buffer!
+unsigned char *aes_encrypt(EVP_CIPHER_CTX *e_ctx, unsigned char *plaintext, int plaintext_len, int *ciphertext_len)
 {
     // The resulting cipher text can range from 0 bytes to: input_length + cipher_block_size - 1
     // (not including the null terminator?).
-    int ciphertext_max_len = *plaintext_len + AES_BLOCK_SIZE;
+    int ciphertext_max_len = plaintext_len + AES_BLOCK_SIZE;
     int update_encrypt_len = 0, final_encrypt_len = 0;
     unsigned char *ciphertext = malloc(ciphertext_max_len);
     unsigned char *ptr = NULL;
@@ -56,7 +59,7 @@ unsigned char *aes_encrypt(EVP_CIPHER_CTX *e_ctx, unsigned char *plaintext, int 
      * Encrypt 'in' and place it in 'out'.
      * Operates on 'inl' (input length) bytes and updates 'outl' accordingly
      */
-    EVP_EncryptUpdate(e_ctx, ciphertext, &update_encrypt_len, plaintext, *plaintext_len);
+    EVP_EncryptUpdate(e_ctx, ciphertext, &update_encrypt_len, plaintext, plaintext_len);
     printf("encrypt update: %d\n", update_encrypt_len);
 
     /*
@@ -70,9 +73,10 @@ unsigned char *aes_encrypt(EVP_CIPHER_CTX *e_ctx, unsigned char *plaintext, int 
     // Skip the portion of the buffer that was written to durign the 'Update' process
     ptr = ciphertext+update_encrypt_len;
     EVP_EncryptFinal_ex(e_ctx, ptr, &final_encrypt_len);
-    printf("encrypt update: %d\n", final_encrypt_len);
+    printf("encrypt final: %d\n", final_encrypt_len);
 
-    *plaintext_len = update_encrypt_len + final_encrypt_len;
+    *ciphertext_len = update_encrypt_len + final_encrypt_len;
+    printf("encrypt total: %d\n", *ciphertext_len);
     return ciphertext;
 }
 
@@ -123,7 +127,7 @@ int main(int argc, char **argv)
         /* */
         olen = len = strlen(input[i])+1;
 
-        ciphertext = aes_encrypt(&en, (unsigned char *)input[i], &len);
+        ciphertext = aes_encrypt(&en, (unsigned char *)input[i], len, &len);
         plaintext = (char *)aes_decrypt(&de, ciphertext, &len);
 
         if (strncmp(plaintext, input[i], olen))
