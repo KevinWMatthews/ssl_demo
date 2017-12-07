@@ -17,21 +17,19 @@ void hexprint(unsigned char *buffer, int buffer_len)
 // buffer_len must include the null terminator
 void decrypt_hex_buffer(unsigned char *buffer, int buffer_len)
 {
-    unsigned char *plaintext = NULL, *ciphertext = NULL, *decryptedtext = NULL;
-    int plaintext_len, ciphertext_len, decryptedtext_len;
+    unsigned char *ciphertext = NULL, *decryptedtext = NULL;
+    int ciphertext_len, decryptedtext_len;
 
-    plaintext = buffer;
-    plaintext_len = buffer_len;
+    ciphertext = buffer;
+    ciphertext_len = buffer_len;
 
-    ciphertext = aes_encrypt(plaintext, plaintext_len, &ciphertext_len);
     decryptedtext = aes_decrypt(ciphertext, ciphertext_len, &decryptedtext_len);
 
-    hexprint(plaintext, plaintext_len);
+    printf("Encrypted data: ");
     hexprint(ciphertext, ciphertext_len);
+    printf("Decrypted data: ");
     hexprint(decryptedtext, decryptedtext_len);
 
-    if (ciphertext)
-        free(ciphertext);
     if (decryptedtext)
         free(decryptedtext);
 }
@@ -102,23 +100,16 @@ int run_aes_demo(int argc, char **argv)
 int main(int argc, char **argv)
 {
     AES_KEY_INFO aes_key = {
-        .key = {0},
+        .key = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05},
         .iv = {0}
     };
-    AES_KEY_INIT_INFO aes_key_init = {0};
-    unsigned char salt[SALT_LEN] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
     unsigned char hex_input[] = {0x4c, 0xbc, 0x48, 0xac, 0x6a, 0x99, 0x03, 0x07, 0x0b, 0x73, 0x66, 0x21, 0xec, 0xe3, 0xd9, 0xf7, 0x00};
+    int i;
 
-    aes_key_init.key_data = (unsigned char *)argv[1];
-    aes_key_init.key_data_len = strlen(argv[1]);
-    aes_key_init.salt = salt;
-    aes_key_init.nrounds = 5;
-
-    if ( aes_create_key_and_iv(&aes_key, &aes_key_init) < 0 )
-    {
-        printf("Failed to create AES key!\n");
-        return 0;
-    }
+    for (i = 0; i < AES_KEY_LEN_128_BIT; i++)
+        aes_key.key[i] = i;
+    printf("AES Key: ");
+    hexprint(aes_key.key, AES_KEY_LEN_128_BIT);
 
     aes_init(&aes_key);
     decrypt_hex_buffer( hex_input, sizeof(hex_input) );
