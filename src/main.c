@@ -52,7 +52,7 @@ int run_aes_demo(int argc, char **argv)
     key_data = (unsigned char *)argv[1];
     key_data_len = strlen(argv[1]);
 
-    if ( aes_init(key_data, key_data_len, (unsigned char *)&salt) < 0 )
+    if ( aes_init_old(key_data, key_data_len, (unsigned char *)&salt) < 0 )
     {
         printf("Couldn't initialize AES cipher\n");
         return -1;
@@ -89,6 +89,28 @@ int run_aes_demo(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-    run_aes_demo(argc, argv);
+    AES_KEY_INFO aes_key = {
+        .key = {0},
+        .iv = {0}
+    };
+    AES_KEY_INIT_INFO aes_key_init = {0};
+    unsigned char salt[SALT_LEN] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+
+    aes_key_init.key_data = (unsigned char *)argv[1];
+    aes_key_init.key_data_len = strlen(argv[1]);
+    aes_key_init.salt = salt;
+    aes_key_init.nrounds = 5;
+
+    if ( aes_create_key_and_iv(&aes_key, &aes_key_init) < 0 )
+    {
+        printf("Failed to create AES key!\n");
+        return 0;
+    }
+
+    aes_init(&aes_key);
+
+
+    aes_uninit();
+
     return 0;
 }

@@ -5,7 +5,39 @@
 static EVP_CIPHER_CTX en_ctx_struct, de_ctx_struct;
 static EVP_CIPHER_CTX *en_ctx, *de_ctx;
 
-int aes_init(unsigned char *key_data, int key_data_len, unsigned char *salt)
+int aes_create_key_and_iv(AES_KEY_INFO *key_info, AES_KEY_INIT_INFO *init_info)
+{
+    int i;
+
+    if (!key_info)
+        return -1;
+    if (!init_info)
+        return -1;
+
+    /*
+     * int EVP_BytesToKey(const EVP_CIPHER *type,const EVP_MD *md,
+     *                       const unsigned char *salt,
+     *                       const unsigned char *data, int datal, int count,
+     *                       unsigned char *key,unsigned char *iv);
+     *
+     * salt should point to an 8-byte buffer or null
+     */
+    i = EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha1(),
+            init_info->salt,
+            init_info->key_data, init_info->key_data_len,
+            init_info->nrounds,
+            key_info->key, key_info->iv
+            );
+    if (i != AES_KEY_LEN_128_BIT)
+    {
+        printf("Key size is %d bytes - should be %d bytes\n", i, AES_KEY_LEN_128_BIT);
+        return -1;
+    }
+
+    return 0;
+}
+
+int aes_init_old(unsigned char *key_data, int key_data_len, unsigned char *salt)
 {
     int i, nrounds = 5;
     unsigned char key[17] = {0}, iv[17] = {0};  // Is null-termination necessary?
@@ -37,10 +69,39 @@ int aes_init(unsigned char *key_data, int key_data_len, unsigned char *salt)
     return 0;
 }
 
+int aes_init(AES_KEY_INFO *key_info)
+{
+    if (en_ctx || de_ctx)
+    {
+        printf("EVP contexts are already initialized! Can not initialize twice.\n");
+        return -1;
+    }
+
+    en_ctx = &en_ctx_struct;
+    de_ctx = &de_ctx_struct;
+
+    /*
+     *  int EVP_EncryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type,
+     *      ENGINE *impl, unsigned char *key, unsigned char *iv);
+     *
+     * Set impl to NULL to use the default implementation.
+     * key is the symmetric key
+     * iv is the IV (Initialization vector)
+     */
+    EVP_CIPHER_CTX_init(en_ctx);
+    EVP_EncryptInit_ex(en_ctx, EVP_aes_128_cbc(), NULL, key_info->key, key_info->iv);
+    EVP_CIPHER_CTX_init(de_ctx);
+    EVP_DecryptInit_ex(de_ctx, EVP_aes_128_cbc(), NULL, key_info->key, key_info->iv);
+
+    return 0;
+}
+
 void aes_uninit(void)
 {
     EVP_CIPHER_CTX_cleanup(en_ctx);
     EVP_CIPHER_CTX_cleanup(de_ctx);
+    en_ctx = NULL;
+    de_ctx = NULL;
 }
 
 // This will return a char * to a malloc'ed buffer of cipher text.
