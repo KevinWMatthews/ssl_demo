@@ -15,12 +15,12 @@ void hexprint(unsigned char *buffer, int buffer_len)
 }
 
 // buffer_len must include the null terminator
-void decrypt_hex_buffer(char *buffer, int buffer_len)
+void decrypt_hex_buffer(unsigned char *buffer, int buffer_len)
 {
     unsigned char *plaintext = NULL, *ciphertext = NULL, *decryptedtext = NULL;
     int plaintext_len, ciphertext_len, decryptedtext_len;
 
-    plaintext = (unsigned char *)buffer;
+    plaintext = buffer;
     plaintext_len = buffer_len;
 
     ciphertext = aes_encrypt(plaintext, plaintext_len, &ciphertext_len);
@@ -107,6 +107,7 @@ int main(int argc, char **argv)
     };
     AES_KEY_INIT_INFO aes_key_init = {0};
     unsigned char salt[SALT_LEN] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+    unsigned char hex_input[] = {0x4c, 0xbc, 0x48, 0xac, 0x6a, 0x99, 0x03, 0x07, 0x0b, 0x73, 0x66, 0x21, 0xec, 0xe3, 0xd9, 0xf7, 0x00};
 
     aes_key_init.key_data = (unsigned char *)argv[1];
     aes_key_init.key_data_len = strlen(argv[1]);
@@ -120,8 +121,7 @@ int main(int argc, char **argv)
     }
 
     aes_init(&aes_key);
-
-
+    decrypt_hex_buffer( hex_input, sizeof(hex_input) );
     aes_uninit();
 
     return 0;
