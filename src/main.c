@@ -6,12 +6,43 @@
 #include <string.h>
 #include "aes_openssl.h"
 
+void hexprint(unsigned char *buffer, int buffer_len)
+{
+    int i;
+    for (i = 0; i < buffer_len; i++)
+        printf("%02x ", buffer[i]);
+    printf("\n");
+}
+
+// buffer_len must include the null terminator
+void decrypt_hex_buffer(char *buffer, int buffer_len)
+{
+    unsigned char *plaintext = NULL, *ciphertext = NULL, *decryptedtext = NULL;
+    int plaintext_len, ciphertext_len, decryptedtext_len;
+
+    plaintext = (unsigned char *)buffer;
+    plaintext_len = buffer_len;
+
+    ciphertext = aes_encrypt(plaintext, plaintext_len, &ciphertext_len);
+    decryptedtext = aes_decrypt(ciphertext, ciphertext_len, &decryptedtext_len);
+
+    hexprint(plaintext, plaintext_len);
+    hexprint(ciphertext, ciphertext_len);
+    hexprint(decryptedtext, decryptedtext_len);
+
+    if (ciphertext)
+        free(ciphertext);
+    if (decryptedtext)
+        free(decryptedtext);
+}
+
 int main(int argc, char **argv)
 {
     unsigned int salt[] = {12345, 54321};
     unsigned char *key_data;
     int key_data_len, i;
     char *input[] = {"a", "abcd", "this is a very long string!! It is so long. So very long.", NULL};
+    char hex_input[] = {0x4c, 0xbc, 0x48, 0xac, 0x6a, 0x99, 0x03, 0x07, 0x0b, 0x73, 0x66, 0x21, 0xec, 0xe3, 0xd9, 0xf7, 0x00};
 
     if (argc <= 1)
     {
@@ -27,6 +58,8 @@ int main(int argc, char **argv)
         printf("Couldn't initialize AES cipher\n");
         return -1;
     }
+
+    decrypt_hex_buffer(hex_input, sizeof(hex_input));
 
     for (i = 0; input[i]; i++)
     {
