@@ -128,19 +128,25 @@ int run_aes_demo(int argc, char **argv)
 #define SAMPLE_AES_KEY  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0
 #define SAMPLE_IV       0
 
-// Sample plaintext dadta to be encrypted
+// Sample plaintext data to be encrypted
 #define HEX_STRING      0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff, 0
+#define HEX_STRING_SHORT    0x00, 0x01, 0x02, 0x03
+#define HEX_STRING_LONG     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0, 0
+
+#define TEXT_STRING         "abcd"
 // This is a demo that I wrote showing how to use the aes_openssl wrapper module.
 void demo_encrypt_decrypt(void)
 {
     // Create struct for AES key
     AES_KEY_INFO aes_key = {
-        .key = {SAMPLE_AES_KEY},
+        // .key = {SAMPLE_AES_KEY},
+        .key = {0},
         .iv = {SAMPLE_IV}
     };
 
     // Create text buffers
-    unsigned char plaintext[] = {HEX_STRING};
+    // unsigned char plaintext[] = {HEX_STRING_SHORT};
+    unsigned char plaintext[16] = {0};
     int plaintext_len = sizeof(plaintext);
     unsigned char *ciphertext = NULL;
     int ciphertext_len = 0;
@@ -154,19 +160,27 @@ void demo_encrypt_decrypt(void)
     hexprint(aes_key.key, AES_KEY_LEN_128_BIT);
     printf("\n");
 
+    printf("\t\t\t01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33\n");
+    printf("\t\t\t--------------------------------------------------------------------------------------------------\n");
     printf("Plain (%d):\t\t", plaintext_len);
     hexprint(plaintext, plaintext_len);
 
     // Encrypt and decrypt
     ciphertext = aes_encrypt(plaintext, plaintext_len, &ciphertext_len);
+    if (!ciphertext)
+        printf("Error encrypting!\n");
+
+    printf("Encrypted (%d):\t\t", ciphertext_len);
+    hexprint(ciphertext, ciphertext_len);
+    printf("\n");
 
     decryptedtext = aes_decrypt(ciphertext, ciphertext_len, &decryptedtext_len);
+    if (!decryptedtext)
+        printf("Error decrypting!\n");
 
     // Print results
     printf("Decrypted (%d):\t\t", decryptedtext_len);
     hexprint(decryptedtext, decryptedtext_len);
-    printf("Encrypted (%d):\t\t", ciphertext_len);
-    hexprint(ciphertext, ciphertext_len);
 
     // Teardown
     aes_uninit();

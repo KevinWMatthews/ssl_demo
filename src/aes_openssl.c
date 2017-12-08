@@ -1,6 +1,19 @@
 #include "aes_openssl.h"
 #include <openssl/aes.h>
+#include <openssl/err.h>
 #include <stdio.h>
+
+#define BUGFIX_EVP_DECRYPT_UPDATE
+
+static void hexprint(unsigned char *buffer, int buffer_len)
+{
+    int i;
+    for (i = 0; i < buffer_len; i++)
+        printf("%02x ", buffer[i]);
+    printf("\n");
+}
+
+// AES_BLOCK_SIZE is 16 bytes and is defined in openssl/aes.h
 
 //TODO we can rewrite this to use a single context, I think.
 // See EVP_CipherInit_ex(), etc.
@@ -13,6 +26,22 @@ typedef enum
 
 static EVP_CIPHER_CTX en_ctx_struct, de_ctx_struct;
 static EVP_CIPHER_CTX *en_ctx, *de_ctx;
+
+static void aes_print_errors(void)
+{
+    /*
+     * void ERR_print_errors_fp(FILE *fp);
+     *
+     * Prints the error strings for all errors that OpenSSL has recorded.
+     * Empties the error queue.
+     *
+     * Error messages are of the form:
+     *  [pid]:error:[error code]:[library name]:[function name]:[reason string]:[file name]:[line]:[optional text message]
+     *
+     * Error messages will be translated to human-readable form if ERR_load_crypto_strings() is called.
+     */
+    ERR_print_errors_fp(stderr);
+}
 
 int aes_create_key_and_iv(AES_KEY_INFO *key_info, AES_KEY_INIT_INFO *init_info)
 {
@@ -56,6 +85,14 @@ int aes_init(AES_KEY_INFO *key_info)
         return AES_FAILURE;
     }
 
+    /*
+     * void ERR_load_crypto_strings(void);
+     *
+     * Registers the error strings for all of OpenSSL's libcrypto functions.
+     * This causes ERR_print_errors_fp to print human-readable output.
+     */
+    ERR_load_crypto_strings();
+
     en_ctx = &en_ctx_struct;
     de_ctx = &de_ctx_struct;
 
@@ -72,18 +109,26 @@ int aes_init(AES_KEY_INFO *key_info)
      *
      * Set impl to NULL to use the default implementation.
      * key is the symmetric key
-     * iv is the IV (Initialization vector)
+     * iv is the IV (Initialization Vector)
      *
      * Returns 1 on success and 0 on failure.
      */
     ret = EVP_EncryptInit_ex(en_ctx, EVP_aes_128_cbc(), NULL, key_info->key, key_info->iv);
     if (ret != EVP_SUCCESS)
+    {
+        printf("%s: Error during EncryptInit\n", __func__);
+        aes_print_errors();
         return AES_FAILURE;
+    }
 
     EVP_CIPHER_CTX_init(de_ctx);
     ret = EVP_DecryptInit_ex(de_ctx, EVP_aes_128_cbc(), NULL, key_info->key, key_info->iv);
     if (ret != EVP_SUCCESS)
+    {
+        printf("%s: Error during DecryptInit\n", __func__);
+        aes_print_errors();
         return AES_FAILURE;
+    }
 
     return AES_SUCCESS;
 }
@@ -93,34 +138,79 @@ int aes_uninit(void)
     int ret_en, ret_de;
 
     ret_en = EVP_CIPHER_CTX_cleanup(en_ctx);
-    ret_de = EVP_CIPHER_CTX_cleanup(de_ctx);
     en_ctx = NULL;
+    if (ret_en != EVP_SUCCESS)
+    {
+        printf("%s: Error during encrypt cleanup\n", __func__);
+        aes_print_errors();
+    }
+
+    ret_de = EVP_CIPHER_CTX_cleanup(de_ctx);
     de_ctx = NULL;
+    if (ret_de != EVP_SUCCESS)
+    {
+        printf("%s: Error during decrypt cleanup\n", __func__);
+        aes_print_errors();
+    }
+
+    /*
+     * void ERR_free_strings(void);
+     *
+     * Free all OpenSSL error strings
+     */
+    ERR_free_strings();
 
     if (ret_en != EVP_SUCCESS)
         return AES_FAILURE;
     if (ret_de != EVP_SUCCESS)
         return AES_FAILURE;
+
     return AES_SUCCESS;
 }
 
-// This will return a char * to a malloc'ed buffer of cipher text.
-// The caller is responsible for freeing this buffer!
-// It places the length of the ciphertext in ciphertext_len.
 unsigned char *aes_encrypt(unsigned char *plaintext, int plaintext_len, int *ciphertext_len)
 {
-    // The resulting cipher text can range from 0 bytes to: input_length + cipher_block_size - 1
-    // (not including the null terminator?).
-    int ciphertext_max_len = plaintext_len + AES_BLOCK_SIZE;
-    int update_encrypt_len = 0, final_encrypt_len = 0;
-    unsigned char *ciphertext = malloc(ciphertext_max_len);
-    // unsigned char *ptr = NULL;
+    int ciphertext_max_len = 0;
+    int update_len = 0, final_len = 0;
+    unsigned char *ciphertext = NULL;
+    unsigned char *ptr = NULL;
     int ret;
 
-    // Not sure why, but this allows us to use the same context for multiple encryption cycles
+    // The resulting encrypted text can range from 0 bytes to: input_length + cipher_block_size - 1
+    // This is true, though in my experience cipher text is always padded/expanded to be
+    // written in increments of AES_BLOCK_SIZE.
+    ciphertext_max_len = plaintext_len + AES_BLOCK_SIZE - 1;
+    ciphertext = calloc( ciphertext_max_len, sizeof(*ciphertext) );
+    if (ciphertext == NULL)
+        return NULL;        // Well, now you're in deep.
+
+    // Not sure why, but this allows us to use the same context for multiple encryption cycles.
+    // It fails if I don't call this.
     ret = EVP_EncryptInit_ex(en_ctx, NULL, NULL, NULL, NULL);
     if (ret != EVP_SUCCESS)
+    {
+        printf("%s: Error during Init\n", __func__);
+        aes_print_errors();
+        if (ciphertext)
+            free(ciphertext);
         return NULL;
+    }
+
+    /*
+     * EncryptUpdate() reads input data in multiples of AES_BLOCK_SIZE
+     * and produces a corresponding amount of encrypted output.
+     *
+     * If the input data *is not* a multiple of AES_BLOCK_SIZE, some input data remains to be
+     * encrypted after the call to EncryptUpdate(). A call to EncryptFinal() will read the
+     * remaining input data and produce one more block (AES_BLOCK_SIZE) of encrypted data.
+     *
+     * If the input data *is* a multiple of AES_BLOCK_SIZE (there is no remaining data),
+     * do not call EncryptFinal()! EncryptUpdate() will encrypt the the entire input.
+     * A call to EncryptFinal() will read and encrypt a block of garbage.
+     *
+     * The encryption algorithms in EncryptFinal() always produce output in blocks of AES_BLOCK_SIZE,
+     * regardless of input size. This is a feature of AES encryption.
+     */
 
     /*
      *  int EVP_EncryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,
@@ -129,66 +219,177 @@ unsigned char *aes_encrypt(unsigned char *plaintext, int plaintext_len, int *cip
      * Encrypt 'in' and place it in 'out'.
      * Operates on 'inl' (input length) bytes and updates 'outl' accordingly.
      *
-     * Can (must?) be called multiple times to encrypt successive blocks of data.
-     * If padding is enabled, a partial block may (will?) not be written.
+     * Reads and encrypts data in multiples of AES_BLOCK_SIZE; no more, no less.
+     * The block size (for AES encryption, at least) is 16 bytes.
      */
-    ret = EVP_EncryptUpdate(en_ctx, ciphertext, &update_encrypt_len, plaintext, plaintext_len);
+    printf("To Encrypt (%-2d):\t", plaintext_len);
+    hexprint(plaintext, plaintext_len);
+
+    ret = EVP_EncryptUpdate(en_ctx, ciphertext, &update_len, plaintext, plaintext_len);
     if (ret != EVP_SUCCESS)
+    {
+        printf("%s: Error during Update\n", __func__);
+        aes_print_errors();
+        if (ciphertext)
+            free(ciphertext);
         return NULL;
+    }
 
-    // printf("update len: %d\n", update_encrypt_len);
+    printf("EnUpdate (%d):\t\t", update_len);
+    hexprint(ciphertext, update_len);
 
-    /*
-     *  int EVP_EncryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *out,
-     *      int *outl);
-     *
-     * If padding is enabled, this encrypts any data that remains in a partial block.
-     * Data is written to out.
-     * The number of bytes written is placed in outl.
-     */
-    // Skip the portion of the buffer that was written to during the 'Update' call.
-    // ptr = ciphertext+update_encrypt_len;
-    // EVP_EncryptFinal_ex(en_ctx, ptr, &final_encrypt_len);
-    // printf("final len: %d\n", final_encrypt_len);
+    if (update_len < plaintext_len)
+    {
+        // Some data remains to be read and encrypted.
+        // Call EncryptFinal() to do this.
 
-    *ciphertext_len = update_encrypt_len + final_encrypt_len;
-    // printf("cipher len: %d\n", *ciphertext_len);
+        // Skip the portion of the buffer that was written to during the 'Update' call.
+        ptr = ciphertext + update_len;
+
+        /*
+         *  int EVP_EncryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *out,
+         *      int *outl);
+         *
+         * If padding is enabled and data remains in a partial block, this encrypts the remaining data.
+         * If padding is enabled and no data remains in a partial block, this produces garbage (!).
+         * If padding is not enabled and a partial block remains, this throws an error.
+         *
+         * Data is written to 'out'.
+         * The number of bytes written is writte to 'outl'.
+         */
+        ret = EVP_EncryptFinal_ex(en_ctx, ptr, &final_len);
+        if (ret != EVP_SUCCESS)
+        {
+            printf("%s: Error during Final\n", __func__);
+            aes_print_errors();
+            if (ciphertext)
+                free(ciphertext);
+            return NULL;
+        }
+
+        printf("EnFinal (%d):\t\t", final_len);
+        hexprint(ptr, final_len);
+    }
+    else if (update_len == plaintext_len)
+    {
+        // All data has been read and encrypted by EncryptUpdate().
+        // A call to EncryptFinal() will read, encrypt, and produce an extra block of garbage!
+        final_len = 0;
+    }
+    else
+    {
+        // This should never happen - EncryptUpdate() shouldn't read more than its input length.
+        printf("%s: Encryption overflow\n", __func__);
+        if (ciphertext)
+            free(ciphertext);
+        return NULL;
+    }
+
+    *ciphertext_len = update_len + final_len;
     return ciphertext;
 }
 
-// This will return a char * to a malloc'ed buffer of decrypted cipher text.
-// The caller is responsible for freeing this buffer!
-// It places the length of the decrypted text in deryptedtext_len.
-unsigned char *aes_decrypt(unsigned char *ciphertext, int ciphertext_len, int *decryptedtext_len)
+unsigned char *aes_decrypt(unsigned char *ciphertext, int ciphertext_len, int *plaintext_len)
 {
-    int decryptedtext_max_len = ciphertext_len + AES_BLOCK_SIZE;        // I think...
-    int update_decrypt_len = 0, final_decrypt_len = 0;
-    unsigned char *decryptedtext = malloc(decryptedtext_max_len);
-    // unsigned char *ptr;
+    int plaintext_max_len = 0;
+    int update_len = 0, final_len = 0;
+    unsigned char *plaintext = NULL;
+    unsigned char *ptr;
+    int ret;
 
-    // Not sure why, but this allows us to use the same context for multiple dencryption cycles
-    EVP_DecryptInit_ex(de_ctx, NULL, NULL, NULL, NULL);
+    // The resulting decrypted text can range from 0 bytes to: input_length + cipher_block_size
+    plaintext_max_len = ciphertext_len + AES_BLOCK_SIZE;
+    plaintext = calloc( plaintext_max_len, sizeof(*plaintext) );
+    if (plaintext == NULL)
+        return NULL;        // Have fun.
+
+    // Not sure why, but this allows us to use the same context for multiple decryption cycles
+    ret = EVP_DecryptInit_ex(de_ctx, NULL, NULL, NULL, NULL);
+    if (ret != EVP_SUCCESS)
+    {
+        printf("%s: Error during Init\n", __func__);
+        aes_print_errors();
+        if (plaintext)
+            free(plaintext);
+        return NULL;
+    }
+
+    /*
+     * DecryptUpdate() reads encrypted input data and produces output in multiples of AES_BLOCK_SIZE.
+     *
+     * If the original unencrypted data *is not* a multiple of AES_BLOCK_SIZE,
+     * some input data remains to be decrypted after the call to DecryptUpdate().
+     * A call to DecryptFinal() will unencrypt the remaining data.
+     *
+     * If the original unencrypted data *is* a multiple of AES_BLOCK_SIZE,
+     * a cal to DecryptFinal() is unnecessary but not harmful.
+     */
 
     /*
      *  int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,
      *      int *outl, unsigned char *in, int inl);
      *
+     * Reads and decryptes data in multiples of AES_BLOCK_SIZE.
+     * Produces output in multiples of AES_BLOCK_SIZE.
+     * Avoid reading beyond 'outl'.
+     *
      * Decrypt 'in' and place it in 'out'.
      * Operates on 'inl' (input length) bytes and updates 'outl' accordingly.
      */
-    EVP_DecryptUpdate(de_ctx, decryptedtext, &update_decrypt_len, ciphertext, ciphertext_len);
+    ret = EVP_DecryptUpdate(de_ctx, plaintext, &update_len, ciphertext, ciphertext_len);
+    if (ret != EVP_SUCCESS)
+    {
+        printf("%s: Error during Update\n", __func__);
+        aes_print_errors();
+        if (plaintext)
+            free(plaintext);
+        return NULL;
+    }
+
+    printf("ciphertext (%d)\n", ciphertext_len);
+    printf("DeUpdate (%d):\t\t", update_len);
+    hexprint(plaintext, update_len);
+
+    // Skip the portion of the buffer that was decrypted the 'Update' process
+    ptr = plaintext + update_len;
 
     /*  int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm,
      *      int *outl);
      *
-     * If padding is enabled, this decrypts any data that remains in a partial block.
-     * Data is written to out.
-     * The number of bytes written is placed in outl.
+     * If padding is enabled and data remains in a partial block, this decrypts the remaining data.
+     * If padding is enabled and no data remains in a partial block, this throws an error.
+     * If padding is not enabled and a partial block remains, this throws an error.
+     *
+     * Data is written to 'out'.
+     * The number of bytes written is written to 'outl'.
      */
-    // Skip the portion of the buffer that was written to during the 'Update' process
-    // ptr = decryptedtext + update_decrypt_len;
-    // EVP_DecryptFinal_ex(de_ctx, ptr, &final_decrypt_len);
+    ret = EVP_DecryptFinal_ex(de_ctx, ptr+16, &final_len);
+    if (ret != EVP_SUCCESS)
+    {
+        printf("%s: Error during Final:\n", __func__);
+        aes_print_errors();
+#ifdef BUGFIX_EVP_DECRYPT_UPDATE
+        /*
+         * There is a bug in OpenSSL 1.0.1f 6 Jan 2014 (or I am using the library improperly):
+         *  If the original input text is a multiple of AES_BLOCK_SIZE (16 bytes),
+         *  EVP_DecryptUpdate() under-reports the number of decrypted bytes by 16.
+         *  In this case there is no data remaining in a partial block so
+         *  EVP_DecryptFinal() yields a 'outl' of zero.
+         */
+        printf("%s: Ignoring error in DecryptFinal - bug workaround\n", __func__);
+        if (final_len == 0)
+            update_len += 16;
+#else
+        if (plaintext)
+            free(plaintext);
+        return NULL;
+#endif
+    }
 
-    *decryptedtext_len = update_decrypt_len + final_decrypt_len;
-    return decryptedtext;
+    printf("DeFinal (%d):\t\t", final_len);
+    hexprint(ptr, final_len);
+
+    *plaintext_len = update_len + final_len;
+
+    return plaintext;
 }

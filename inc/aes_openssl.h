@@ -60,17 +60,24 @@ int aes_uninit(void);
  * cipher text string to ciphertext_len.
  * The caller is responsible for freeing the cipher text buffer!
  *
- *TODO Failure is unhandled.
+ * There is no null terminator; the encrypted string must be treated as binary data.
+ *
+ * Returns a malloc'ed pointer to cipher text on success, NULL on failure.
  */
 unsigned char *aes_encrypt(unsigned char *plaintext, int plaintext_len, int *ciphertext_len);
 
 /*
- * Decrypt the cipher text string, return a pointer to the decrypted text, and write the length of the
- * decrypted text string to decryptedtext_len.
- * The caller is responsible for freeing the decrypted text buffer!
+ * Decrypt the cipher text string, return a pointer to the plain text, and write the length of the
+ * decrypted text string to plaintext_len.
+ * The caller is responsible for freeing the returned plaintext buffer!
  *
- *TODO Failure is unhandled.
+ * Do not read off the end of this byte array! The low-level library's decrypt function
+ * will populate it with junk data.
+ *
+ * There is no null terminator; the decrypted plaintext string must be treated as binary data.
+ *
+ * Returns a malloc'ed pointer to plain text on success, NULL on failure.
  */
-unsigned char *aes_decrypt(unsigned char *ciphertext, int ciphertext_len, int *decryptedtext_len);
+unsigned char *aes_decrypt(unsigned char *ciphertext, int ciphertext_len, int *plaintext_len);
 
 #endif
