@@ -2,6 +2,9 @@
 #include <openssl/aes.h>
 #include <stdio.h>
 
+//TODO we can rewrite this to use a single context, I think.
+// See EVP_CipherInit_ex(), etc.
+
 typedef enum
 {
     EVP_FALURE  = 0,
@@ -37,10 +40,10 @@ int aes_create_key_and_iv(AES_KEY_INFO *key_info, AES_KEY_INIT_INFO *init_info)
     if (i != AES_KEY_LEN_128_BIT)
     {
         printf("Key size is %d bytes - should be %d bytes\n", i, AES_KEY_LEN_128_BIT);
-        return -1;
+        return AES_FAILURE;
     }
 
-    return 0;
+    return AES_SUCCESS;
 }
 
 int aes_init(AES_KEY_INFO *key_info)
@@ -50,7 +53,7 @@ int aes_init(AES_KEY_INFO *key_info)
     if (en_ctx || de_ctx)
     {
         printf("EVP contexts are already initialized! Can not initialize twice.\n");
-        return -1;
+        return AES_FAILURE;
     }
 
     en_ctx = &en_ctx_struct;
@@ -111,10 +114,13 @@ unsigned char *aes_encrypt(unsigned char *plaintext, int plaintext_len, int *cip
     int ciphertext_max_len = plaintext_len + AES_BLOCK_SIZE;
     int update_encrypt_len = 0, final_encrypt_len = 0;
     unsigned char *ciphertext = malloc(ciphertext_max_len);
-    unsigned char *ptr = NULL;
+    // unsigned char *ptr = NULL;
+    int ret;
 
     // Not sure why, but this allows us to use the same context for multiple encryption cycles
-    EVP_EncryptInit_ex(en_ctx, NULL, NULL, NULL, NULL);
+    ret = EVP_EncryptInit_ex(en_ctx, NULL, NULL, NULL, NULL);
+    if (ret != EVP_SUCCESS)
+        return NULL;
 
     /*
      *  int EVP_EncryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,
@@ -122,8 +128,15 @@ unsigned char *aes_encrypt(unsigned char *plaintext, int plaintext_len, int *cip
      *
      * Encrypt 'in' and place it in 'out'.
      * Operates on 'inl' (input length) bytes and updates 'outl' accordingly.
+     *
+     * Can (must?) be called multiple times to encrypt successive blocks of data.
+     * If padding is enabled, a partial block may (will?) not be written.
      */
-    EVP_EncryptUpdate(en_ctx, ciphertext, &update_encrypt_len, plaintext, plaintext_len);
+    ret = EVP_EncryptUpdate(en_ctx, ciphertext, &update_encrypt_len, plaintext, plaintext_len);
+    if (ret != EVP_SUCCESS)
+        return NULL;
+
+    // printf("update len: %d\n", update_encrypt_len);
 
     /*
      *  int EVP_EncryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *out,
@@ -133,11 +146,13 @@ unsigned char *aes_encrypt(unsigned char *plaintext, int plaintext_len, int *cip
      * Data is written to out.
      * The number of bytes written is placed in outl.
      */
-    // Skip the portion of the buffer that was written to durign the 'Update' process
-    ptr = ciphertext+update_encrypt_len;
-    EVP_EncryptFinal_ex(en_ctx, ptr, &final_encrypt_len);
+    // Skip the portion of the buffer that was written to during the 'Update' call.
+    // ptr = ciphertext+update_encrypt_len;
+    // EVP_EncryptFinal_ex(en_ctx, ptr, &final_encrypt_len);
+    // printf("final len: %d\n", final_encrypt_len);
 
     *ciphertext_len = update_encrypt_len + final_encrypt_len;
+    // printf("cipher len: %d\n", *ciphertext_len);
     return ciphertext;
 }
 
@@ -149,7 +164,7 @@ unsigned char *aes_decrypt(unsigned char *ciphertext, int ciphertext_len, int *d
     int decryptedtext_max_len = ciphertext_len + AES_BLOCK_SIZE;        // I think...
     int update_decrypt_len = 0, final_decrypt_len = 0;
     unsigned char *decryptedtext = malloc(decryptedtext_max_len);
-    unsigned char *ptr;
+    // unsigned char *ptr;
 
     // Not sure why, but this allows us to use the same context for multiple dencryption cycles
     EVP_DecryptInit_ex(de_ctx, NULL, NULL, NULL, NULL);
@@ -170,9 +185,9 @@ unsigned char *aes_decrypt(unsigned char *ciphertext, int ciphertext_len, int *d
      * Data is written to out.
      * The number of bytes written is placed in outl.
      */
-    // Skip the portion of the buffer that was written to durign the 'Update' process
-    ptr = decryptedtext + update_decrypt_len;
-    EVP_DecryptFinal_ex(de_ctx, ptr, &final_decrypt_len);
+    // Skip the portion of the buffer that was written to during the 'Update' process
+    // ptr = decryptedtext + update_decrypt_len;
+    // EVP_DecryptFinal_ex(de_ctx, ptr, &final_decrypt_len);
 
     *decryptedtext_len = update_decrypt_len + final_decrypt_len;
     return decryptedtext;

@@ -14,6 +14,7 @@ void hexprint(unsigned char *buffer, int buffer_len)
     printf("\n");
 }
 
+#if 0
 // buffer_len must include the null terminator
 void decrypt_hex_buffer(unsigned char *buffer, int buffer_len)
 {
@@ -55,7 +56,9 @@ void encrypt_hex_buffer(unsigned char *buffer, int buffer_len)
     // if (ciphertext)
         // free(ciphertext);
 }
+#endif
 
+#if 0
 // This demo if based on the original example.
 int run_aes_demo(int argc, char **argv)
 {
@@ -119,6 +122,7 @@ int run_aes_demo(int argc, char **argv)
 
     return 0;
 }
+#endif
 
 // 16 bytes (AES_KEY_LEN_128_BIT) plus a null terminator
 #define SAMPLE_AES_KEY  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0
@@ -146,19 +150,22 @@ void demo_encrypt_decrypt(void)
     // Initialize
     aes_init(&aes_key);
 
+    printf("AES Key:\t\t");
+    hexprint(aes_key.key, AES_KEY_LEN_128_BIT);
+    printf("\n");
+
+    printf("Plain (%d):\t\t", plaintext_len);
+    hexprint(plaintext, plaintext_len);
+
     // Encrypt and decrypt
     ciphertext = aes_encrypt(plaintext, plaintext_len, &ciphertext_len);
+
     decryptedtext = aes_decrypt(ciphertext, ciphertext_len, &decryptedtext_len);
 
     // Print results
-    printf("AES Key:\t");
-    hexprint(aes_key.key, AES_KEY_LEN_128_BIT);
-    printf("\n");
-    printf("Plain:\t\t");
-    hexprint(plaintext, plaintext_len);
-    printf("Decrypted:\t");
+    printf("Decrypted (%d):\t\t", decryptedtext_len);
     hexprint(decryptedtext, decryptedtext_len);
-    printf("Encrypted:\t");
+    printf("Encrypted (%d):\t\t", ciphertext_len);
     hexprint(ciphertext, ciphertext_len);
 
     // Teardown
@@ -169,6 +176,7 @@ void demo_encrypt_decrypt(void)
         free(decryptedtext);
 }
 
+#if 0
 void demo_mifare_plus_x(void)
 {
     unsigned char rnd_b[] = {0x08, 0x2E, 0xC5, 0xDB, 0x5B, 0x11, 0xFF, 0xEE, 0xFB, 0x21, 0x4F, 0x26, 0x93, 0x66, 0x09, 0xDE, 0};
@@ -228,6 +236,7 @@ void demo_mifare_plus_x(void)
 
     aes_uninit();
 }
+#endif
 
 int main(int argc, char **argv)
 {
