@@ -37,38 +37,6 @@ int aes_create_key_and_iv(AES_KEY_INFO *key_info, AES_KEY_INIT_INFO *init_info)
     return 0;
 }
 
-int aes_init_old(unsigned char *key_data, int key_data_len, unsigned char *salt)
-{
-    int i, nrounds = 5;
-    unsigned char key[17] = {0}, iv[17] = {0};  // Is null-termination necessary?
-
-    en_ctx = &en_ctx_struct;
-    de_ctx = &de_ctx_struct;
-
-    // Generate key and initialization vector
-    i = EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha1(), salt, key_data, key_data_len, nrounds, key, iv);
-    if (i != 16)
-    {
-        printf("Key size is %d bytes - should be 16 bytes (128 bits)\n", i);
-        return -1;
-    }
-
-    /*
-     *  int EVP_EncryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type,
-     *      ENGINE *impl, unsigned char *key, unsigned char *iv);
-     *
-     * Set impl to NULL to use the default implementation.
-     * key is the symmetric key
-     * iv is the IV (Initialization vector)
-     */
-    EVP_CIPHER_CTX_init(en_ctx);
-    EVP_EncryptInit_ex(en_ctx, EVP_aes_128_cbc(), NULL, key, iv);
-    EVP_CIPHER_CTX_init(de_ctx);
-    EVP_DecryptInit_ex(de_ctx, EVP_aes_128_cbc(), NULL, key, iv);
-
-    return 0;
-}
-
 int aes_init(AES_KEY_INFO *key_info)
 {
     if (en_ctx || de_ctx)

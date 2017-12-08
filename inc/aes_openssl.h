@@ -31,18 +31,6 @@ typedef struct AES_KEY_INIT_INFO
 int aes_init(AES_KEY_INFO *key_info);
 
 /*
- * Create key and initialization vector from key data and a salt,
- * create and initialize EVP contexts.
- *
- * EVP contexts are handled entirely by the aes_openssl module,
- * but only a single context can be used at once.
- *
- * Returns 0 on success and -1 on failure.
- */
-
-int aes_init_old(unsigned char *key_data, int key_data_len, unsigned char *salt);
-
-/*
  * Create key and initialization vector from key data and a salt.
  *
  * Modifies the contents of key_info with the newly-created AES key and initialization vector.
