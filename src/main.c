@@ -137,8 +137,68 @@ void decrypt_encrypt_demo(void)
     aes_uninit();
 }
 
+void demo_mifare_plus_x(void)
+{
+    unsigned char rnd_b[] = {0x08, 0x2E, 0xC5, 0xDB, 0x5B, 0x11, 0xFF, 0xEE, 0xFB, 0x21, 0x4F, 0x26, 0x93, 0x66, 0x09, 0xDE, 0};
+    int rnd_b_len = sizeof(rnd_b);
+
+    unsigned char *E_rnd_b = NULL;
+    int E_rnd_b_len = 0;
+
+    unsigned char expected_E_rnd_b[] = {0xE2, 0x76, 0x3C, 0xAA, 0x9E, 0xF7, 0x9C, 0xC0, 0x63, 0xA1, 0xC6, 0x42, 0xAD, 0x56, 0x39, 0xC5, 0};
+
+    AES_KEY_INFO aes_key = {
+        .key = {0xA3, 0x81, 0x52, 0xC9, 0x03, 0x55, 0xCC, 0x63, 0xAC, 0x6E, 0x97, 0xA3, 0x99, 0x80, 0x7b, 0x59, 0},
+        .iv = {0}
+    };
+
+    aes_init(&aes_key);
+    E_rnd_b = aes_encrypt( rnd_b, rnd_b_len, &E_rnd_b_len );
+    printf("Expected: ");
+    hexprint(expected_E_rnd_b, 16);
+    printf("Actual:   ");
+    hexprint(E_rnd_b, 16);
+
+    unsigned char rnd_a[] = {0xBA, 0x0D, 0xB8, 0x20, 0x1E, 0x89, 0x7F, 0x8A, 0x5C, 0xD2, 0xAF, 0x32, 0x7A, 0xD4, 0xB5, 0xEC, 0};
+
+    unsigned char rnd_b_prime[17] = {0};
+    unsigned char expected_rnd_b_prime[] = {0x2E, 0xC5, 0xDB, 0x5B, 0x11, 0xFF, 0xEE, 0xFB, 0x21, 0x4F, 0x26, 0x93, 0x66, 0x09, 0xDE, 0x08, 0};
+
+    // RndA | RndB'
+    unsigned char challenge_rsp[] = {0xBE, 0xCD, 0xFB, 0x7B, 0x1F, 0xFF, 0xFF, 0xFB, 0x7D, 0xDF, 0xAF, 0xB3, 0x7E, 0xDD, 0xFF, 0xEC, 0};
+    int challenge_rsp_len = sizeof(challenge_rsp);
+
+    unsigned char E_expected_challenge_rsp[] = {0x77, 0x90, 0xAE, 0xE6, 0xE2, 0xDA, 0x41, 0xA3, 0x4A, 0x8B, 0x8E, 0x63, 0x4C, 0x0F, 0xD6, 0x80, 0xC1, 0xED, 0xAB, 0x08, 0x64, 0x38, 0x56, 0x1F, 0x69, 0xA5, 0x65, 0xF5, 0xDB, 0xEC, 0x49, 0xA8, 0};
+    unsigned char E_expected_challenge_rsp_len = sizeof(E_expected_challenge_rsp);
+
+    // Decrypt the expected challenge response that the manual gives
+    unsigned char *expected_challenge_rsp;
+    unsigned char expected_challenge_rsp_len;
+
+    expected_challenge_rsp = aes_decrypt(E_expected_challenge_rsp, E_expected_challenge_rsp_len, &expected_challenge_rsp_len);
+    printf("DChallenge: ");
+    hexprint(expected_challenge_rsp, expected_challenge_rsp_len);
+
+    // Re-encrypt it to see if I can do it.
+    unsigned char *RE_expected_challenge_rsp;
+    unsigned char RE_expected_challenge_rsp_len;
+
+    RE_expected_challenge_rsp = aes_encrypt(expected_challenge_rsp, expected_challenge_rsp_len, &RE_expected_challenge_rsp_len);
+    printf("REChallenge:");
+    hexprint(RE_expected_challenge_rsp, RE_expected_challenge_rsp_len);
+
+    // Now encrypt my challenge response
+    unsigned char * E_challenge_rsp;
+    int E_challenge_rsp_len;
+    E_challenge_rsp = aes_encrypt(challenge_rsp, challenge_rsp_len, &E_challenge_rsp_len);
+    printf("EChallenge: ");
+    hexprint(E_challenge_rsp, E_challenge_rsp_len);
+
+    aes_uninit();
+}
+
 int main(int argc, char **argv)
 {
-    decrypt_encrypt_demo();
+    demo_mifare_plus_x();
     return 0;
 }
