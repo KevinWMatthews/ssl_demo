@@ -2,6 +2,12 @@
 #include <openssl/aes.h>
 #include <stdio.h>
 
+typedef enum
+{
+    EVP_FALURE  = 0,
+    EVP_SUCCESS = 1
+} OPENSSL_EVP_ERROR;
+
 static EVP_CIPHER_CTX en_ctx_struct, de_ctx_struct;
 static EVP_CIPHER_CTX *en_ctx, *de_ctx;
 
@@ -39,6 +45,8 @@ int aes_create_key_and_iv(AES_KEY_INFO *key_info, AES_KEY_INIT_INFO *init_info)
 
 int aes_init(AES_KEY_INFO *key_info)
 {
+    int ret;
+
     if (en_ctx || de_ctx)
     {
         printf("EVP contexts are already initialized! Can not initialize twice.\n");
@@ -49,27 +57,48 @@ int aes_init(AES_KEY_INFO *key_info)
     de_ctx = &de_ctx_struct;
 
     /*
+     * void EVP_CIPHER_CTX_init(EVP_CIPHER_CTX *a);
+     *
+     * Initializes cipher contex. Apparently it can not fail.
+     */
+    EVP_CIPHER_CTX_init(en_ctx);
+
+    /*
      *  int EVP_EncryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type,
      *      ENGINE *impl, unsigned char *key, unsigned char *iv);
      *
      * Set impl to NULL to use the default implementation.
      * key is the symmetric key
      * iv is the IV (Initialization vector)
+     *
+     * Returns 1 on success and 0 on failure.
      */
-    EVP_CIPHER_CTX_init(en_ctx);
-    EVP_EncryptInit_ex(en_ctx, EVP_aes_128_cbc(), NULL, key_info->key, key_info->iv);
-    EVP_CIPHER_CTX_init(de_ctx);
-    EVP_DecryptInit_ex(de_ctx, EVP_aes_128_cbc(), NULL, key_info->key, key_info->iv);
+    ret = EVP_EncryptInit_ex(en_ctx, EVP_aes_128_cbc(), NULL, key_info->key, key_info->iv);
+    if (ret != EVP_SUCCESS)
+        return AES_FAILURE;
 
-    return 0;
+    EVP_CIPHER_CTX_init(de_ctx);
+    ret = EVP_DecryptInit_ex(de_ctx, EVP_aes_128_cbc(), NULL, key_info->key, key_info->iv);
+    if (ret != EVP_SUCCESS)
+        return AES_FAILURE;
+
+    return AES_SUCCESS;
 }
 
-void aes_uninit(void)
+int aes_uninit(void)
 {
-    EVP_CIPHER_CTX_cleanup(en_ctx);
-    EVP_CIPHER_CTX_cleanup(de_ctx);
+    int ret_en, ret_de;
+
+    ret_en = EVP_CIPHER_CTX_cleanup(en_ctx);
+    ret_de = EVP_CIPHER_CTX_cleanup(de_ctx);
     en_ctx = NULL;
     de_ctx = NULL;
+
+    if (ret_en != EVP_SUCCESS)
+        return AES_FAILURE;
+    if (ret_de != EVP_SUCCESS)
+        return AES_FAILURE;
+    return AES_SUCCESS;
 }
 
 // This will return a char * to a malloc'ed buffer of cipher text.

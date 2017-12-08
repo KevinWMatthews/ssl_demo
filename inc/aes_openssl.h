@@ -3,6 +3,12 @@
 
 #include <openssl/evp.h>
 
+typedef enum
+{
+    AES_SUCCESS     = 0,
+    AES_FAILURE     = -1
+} AES_RETURN_CODE;
+
 #define AES_KEY_LEN_128_BIT         16
 #define SALT_LEN                    8
 typedef struct AES_KEY_INFO
@@ -22,7 +28,9 @@ typedef struct AES_KEY_INIT_INFO
 /*
  * Initialize AES library.
  *
- * Initializes the EVP contexts.
+ * Requires an AES key and initialization vector.
+ *
+ * Initializes the EVP contexts that OpenSSL uses for encryption and decryption.
  * EVP contexts are handled entirely by the aes_openssl module,
  * but only a single context can be used at once.
  *
@@ -41,8 +49,11 @@ int aes_create_key_and_iv(AES_KEY_INFO *key_info, AES_KEY_INIT_INFO *init_info);
 
 /*
  * Free all EVP contexts.
+ *
+ * Will attempt to free all contexts before returning, even if some fail.
+ * Returns 0 on success and -1 on failure.
  */
-void aes_uninit(void);
+int aes_uninit(void);
 
 /*
  * Encrypt the plain text string, return a pointer to the cipher text, and write the length of the
