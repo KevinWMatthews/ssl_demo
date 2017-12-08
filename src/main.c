@@ -34,6 +34,25 @@ void decrypt_hex_buffer(unsigned char *buffer, int buffer_len)
         free(decryptedtext);
 }
 
+void encrypt_hex_buffer(unsigned char *buffer, int buffer_len)
+{
+    unsigned char *plaintext = NULL, *ciphertext = NULL;
+    int plaintext_len, ciphertext_len;
+
+    plaintext = buffer;
+    plaintext_len = buffer_len;
+
+    ciphertext = aes_encrypt(plaintext, plaintext_len, &ciphertext_len);
+
+    printf("Original data:  ");
+    hexprint(plaintext, plaintext_len);
+    printf("Encrypted data: ");
+    hexprint(ciphertext, ciphertext_len);
+
+    if (ciphertext)
+        free(ciphertext);
+}
+
 int run_aes_demo(int argc, char **argv)
 {
     AES_KEY_INFO aes_key = {
@@ -104,6 +123,7 @@ int main(int argc, char **argv)
         .iv = {0}
     };
     unsigned char hex_input[] = {0x4c, 0xbc, 0x48, 0xac, 0x6a, 0x99, 0x03, 0x07, 0x0b, 0x73, 0x66, 0x21, 0xec, 0xe3, 0xd9, 0xf7, 0x00};
+    unsigned char hex_input2[] = {0x2c, 0x5f, 0xfc, 0x14, 0x0a, 0x21, 0xf8, 0x5c, 0xfd, 0x74, 0xa4, 0xb5, 0x25, 0xa5, 0x52, 0x3e};
     int i;
 
     for (i = 0; i < AES_KEY_LEN_128_BIT; i++)
@@ -113,6 +133,7 @@ int main(int argc, char **argv)
 
     aes_init(&aes_key);
     decrypt_hex_buffer( hex_input, sizeof(hex_input) );
+    encrypt_hex_buffer( hex_input2, sizeof(hex_input2) );
     aes_uninit();
 
     return 0;
