@@ -41,18 +41,22 @@ void encrypt_hex_buffer(unsigned char *buffer, int buffer_len)
 
     plaintext = buffer;
     plaintext_len = buffer_len;
-
-    ciphertext = aes_encrypt(plaintext, plaintext_len, &ciphertext_len);
-
-    printf("Original data:  ");
+    printf("buffer: ");
     hexprint(plaintext, plaintext_len);
-    printf("Encrypted data: ");
-    hexprint(ciphertext, ciphertext_len);
+    printf("buffer len: %d\n", buffer_len);
 
-    if (ciphertext)
-        free(ciphertext);
+    // ciphertext = aes_encrypt(plaintext, plaintext_len, &ciphertext_len);
+
+    // printf("Original data:  ");
+    // hexprint(plaintext, plaintext_len);
+    // printf("Encrypted data: ");
+    // hexprint(ciphertext, ciphertext_len);
+
+    // if (ciphertext)
+        // free(ciphertext);
 }
 
+// This demo if based on the original example.
 int run_aes_demo(int argc, char **argv)
 {
     AES_KEY_INFO aes_key = {
@@ -116,25 +120,53 @@ int run_aes_demo(int argc, char **argv)
     return 0;
 }
 
-void decrypt_encrypt_demo(void)
+// 16 bytes (AES_KEY_LEN_128_BIT) plus a null terminator
+#define SAMPLE_AES_KEY  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0
+#define SAMPLE_IV       0
+
+// Sample plaintext dadta to be encrypted
+#define HEX_STRING      0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff, 0
+// This is a demo that I wrote showing how to use the aes_openssl wrapper module.
+void demo_encrypt_decrypt(void)
 {
+    // Create struct for AES key
     AES_KEY_INFO aes_key = {
-        .key = {0},
-        .iv = {0}
+        .key = {SAMPLE_AES_KEY},
+        .iv = {SAMPLE_IV}
     };
-    unsigned char hex_input[] = {0x4c, 0xbc, 0x48, 0xac, 0x6a, 0x99, 0x03, 0x07, 0x0b, 0x73, 0x66, 0x21, 0xec, 0xe3, 0xd9, 0xf7, 0};
-    unsigned char hex_input2[] = {0x2c, 0x5f, 0xfc, 0x14, 0x0a, 0x21, 0xf8, 0x5c, 0xfd, 0x74, 0xa4, 0xb5, 0x25, 0xa5, 0x52, 0x3e};
-    int i;
 
-    for (i = 0; i < AES_KEY_LEN_128_BIT; i++)
-        aes_key.key[i] = i;
-    printf("AES Key: ");
-    hexprint(aes_key.key, AES_KEY_LEN_128_BIT);
+    // Create text buffers
+    unsigned char plaintext[] = {HEX_STRING};
+    int plaintext_len = sizeof(plaintext);
+    unsigned char *ciphertext = NULL;
+    int ciphertext_len = 0;
+    unsigned char *decryptedtext = NULL;
+    int decryptedtext_len = 0;
 
+    // Initialize
     aes_init(&aes_key);
-    decrypt_hex_buffer( hex_input, sizeof(hex_input) );
-    encrypt_hex_buffer( hex_input2, sizeof(hex_input2) );
+
+    // Encrypt and decrypt
+    ciphertext = aes_encrypt(plaintext, plaintext_len, &ciphertext_len);
+    decryptedtext = aes_decrypt(ciphertext, ciphertext_len, &decryptedtext_len);
+
+    // Print results
+    printf("AES Key:\t");
+    hexprint(aes_key.key, AES_KEY_LEN_128_BIT);
+    printf("\n");
+    printf("Plain:\t\t");
+    hexprint(plaintext, plaintext_len);
+    printf("Decrypted:\t");
+    hexprint(decryptedtext, decryptedtext_len);
+    printf("Encrypted:\t");
+    hexprint(ciphertext, ciphertext_len);
+
+    // Teardown
     aes_uninit();
+    if (ciphertext)
+        free(ciphertext);
+    if (decryptedtext)
+        free(decryptedtext);
 }
 
 void demo_mifare_plus_x(void)
@@ -199,6 +231,6 @@ void demo_mifare_plus_x(void)
 
 int main(int argc, char **argv)
 {
-    demo_mifare_plus_x();
+    demo_encrypt_decrypt();
     return 0;
 }
