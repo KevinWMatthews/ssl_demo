@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <tools.h>
 
-#define BUGFIX_EVP_DECRYPT_UPDATE
+#define WORKAROUND_NO_PADDING_EVP_DECRYPT_UPDATE
 
 // AES_BLOCK_SIZE is 16 bytes and is defined in openssl/aes.h
 
@@ -16,6 +16,12 @@ typedef enum
     EVP_FALURE  = 0,
     EVP_SUCCESS = 1
 } OPENSSL_EVP_ERROR;
+
+typedef enum
+{
+    EVP_PADDING_ENABLE  = 1,        // Anything but 0
+    EVP_PADDING_DISABLE = 0         // Specifically 0
+} OPENSSL_EVP_PADDING;
 
 static EVP_CIPHER_CTX en_ctx_struct, de_ctx_struct;
 static EVP_CIPHER_CTX *en_ctx, *de_ctx;
@@ -119,6 +125,27 @@ int aes_init(AES_KEY_INFO *key_info)
     if (ret != EVP_SUCCESS)
     {
         printf("%s: Error during DecryptInit\n", __func__);
+        aes_print_errors();
+        return AES_FAILURE;
+    }
+
+    // Force the end user to encrypt 16-byte blocks
+    ret = EVP_CIPHER_CTX_set_padding(en_ctx, 0);
+    if (ret != EVP_SUCCESS)
+    {
+        printf("%s: Error during set encrypt padding\n", __func__);
+        aes_print_errors();
+        return AES_FAILURE;
+    }
+
+    // Force the end user to decrypt 16-byte blocks
+    // Also prevents EVP_DecryptFinal() from throwing an error
+    // when the original plaintext is a multiple of AES_BLOCK_SIZE (valid).
+    // Hopefully I'm misusing the library.
+    ret = EVP_CIPHER_CTX_set_padding(de_ctx, 0);
+    if (ret != EVP_SUCCESS)
+    {
+        printf("%s: Error during set decrypt padding\n", __func__);
         aes_print_errors();
         return AES_FAILURE;
     }
@@ -348,13 +375,14 @@ unsigned char *aes_decrypt(unsigned char *ciphertext, int ciphertext_len, int *p
     {
         printf("%s: Error during Final:\n", __func__);
         aes_print_errors();
-#ifdef BUGFIX_EVP_DECRYPT_UPDATE
+#ifdef WORKAROUND_NO_PADDING_EVP_DECRYPT_UPDATE
         /*
-         * There is a bug in OpenSSL 1.0.1f 6 Jan 2014 (or I am using the library improperly):
+         * If padding is disabled:
          *  If the original input text is a multiple of AES_BLOCK_SIZE (16 bytes),
          *  EVP_DecryptUpdate() under-reports the number of decrypted bytes by 16.
          *  In this case there is no data remaining in a partial block so
          *  EVP_DecryptFinal() yields a 'outl' of zero.
+         * Am I misusing the library?
          */
         printf("%s: Ignoring error in DecryptFinal - bug workaround\n", __func__);
         if (final_len == 0)
