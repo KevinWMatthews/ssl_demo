@@ -222,9 +222,6 @@ unsigned char *aes_encrypt(unsigned char *plaintext, int plaintext_len, int *cip
      * Reads and encrypts data in multiples of AES_BLOCK_SIZE; no more, no less.
      * The block size (for AES encryption, at least) is 16 bytes.
      */
-    printf("To Encrypt (%-2d):\t", plaintext_len);
-    hexprint(plaintext, plaintext_len);
-
     ret = EVP_EncryptUpdate(en_ctx, ciphertext, &update_len, plaintext, plaintext_len);
     if (ret != EVP_SUCCESS)
     {
@@ -234,9 +231,6 @@ unsigned char *aes_encrypt(unsigned char *plaintext, int plaintext_len, int *cip
             free(ciphertext);
         return NULL;
     }
-
-    printf("EnUpdate (%d):\t\t", update_len);
-    hexprint(ciphertext, update_len);
 
     if (update_len < plaintext_len)
     {
@@ -266,9 +260,6 @@ unsigned char *aes_encrypt(unsigned char *plaintext, int plaintext_len, int *cip
                 free(ciphertext);
             return NULL;
         }
-
-        printf("EnFinal (%d):\t\t", final_len);
-        hexprint(ptr, final_len);
     }
     else if (update_len == plaintext_len)
     {
@@ -346,10 +337,6 @@ unsigned char *aes_decrypt(unsigned char *ciphertext, int ciphertext_len, int *p
         return NULL;
     }
 
-    printf("ciphertext (%d)\n", ciphertext_len);
-    printf("DeUpdate (%d):\t\t", update_len);
-    hexprint(plaintext, update_len);
-
     // Skip the portion of the buffer that was decrypted the 'Update' process
     ptr = plaintext + update_len;
 
@@ -385,9 +372,6 @@ unsigned char *aes_decrypt(unsigned char *ciphertext, int ciphertext_len, int *p
         return NULL;
 #endif
     }
-
-    printf("DeFinal (%d):\t\t", final_len);
-    hexprint(ptr, final_len);
 
     *plaintext_len = update_len + final_len;
 
