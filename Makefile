@@ -5,7 +5,7 @@ TARGET_NAME=ssl_demo
 
 # List all source files here.
 # These are assumed to be in SRCDIR.
-SRC=main.c aes_openssl.c
+SRC=main.c aes_openssl.c tools.c
 
 SRCDIR=src
 OBJDIR=obj

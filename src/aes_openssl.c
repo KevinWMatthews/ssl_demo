@@ -2,16 +2,9 @@
 #include <openssl/aes.h>
 #include <openssl/err.h>
 #include <stdio.h>
+#include <tools.h>
 
 #define BUGFIX_EVP_DECRYPT_UPDATE
-
-static void hexprint(unsigned char *buffer, int buffer_len)
-{
-    int i;
-    for (i = 0; i < buffer_len; i++)
-        printf("%02x ", buffer[i]);
-    printf("\n");
-}
 
 // AES_BLOCK_SIZE is 16 bytes and is defined in openssl/aes.h
 

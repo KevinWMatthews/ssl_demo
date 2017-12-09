@@ -5,14 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "aes_openssl.h"
-
-void hexprint(unsigned char *buffer, int buffer_len)
-{
-    int i;
-    for (i = 0; i < buffer_len; i++)
-        printf("%02x ", buffer[i]);
-    printf("\n");
-}
+#include "tools.h"
 
 #if 0
 // buffer_len must include the null terminator
